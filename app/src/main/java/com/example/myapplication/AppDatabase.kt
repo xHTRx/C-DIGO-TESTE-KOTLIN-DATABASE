@@ -8,7 +8,6 @@ import androidx.room.RoomDatabase
 @Database(entities = [Filmes::class], version = 1, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
-    // public static AppDatabase INSTANCE = null
 
 
     abstract fun filmesDAO(): FilmesDAO

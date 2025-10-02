@@ -27,91 +27,74 @@ import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.unit.dp
 
+// NOVO CÓDIGO DA MAINACTIVITY SIMPLIFICADA
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        val db = AppDatabase.getDatabase(this)
-        val dao = db.filmesDAO() // Obtenha o DAO
-
-
         setContent {
+            // Não precisa de ViewModelProvider aqui
             BancoOsorioTheme {
-                // Instancia o ViewModel, passando o DAO
-                val viewModel: FilmesViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-                    factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            // VERIFICAÇÃO DE TIPO MELHORADA
-                            if (modelClass.isAssignableFrom(FilmesViewModel::class.java)) {
-                                @Suppress("UNCHECKED_CAST")
-                                return FilmesViewModel(dao) as T
-                            }
-                            throw IllegalArgumentException("Unknown ViewModel class")
-                        }
-                    }
-                )
-
-                // Pega a lista de filmes do StateFlow
-                val listaFilmes by viewModel.filmesState.collectAsState()
-
-                FilmesScreen(
-                    filmes = listaFilmes,
-                    onAdicionarClick = viewModel::adicionarFilme // Passa a função de adição
-                )
+                // Chama a tela principal
+                TelaCadastroFilmesSimplificada()
             }
         }
     }
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
+// A função externa que insere o filme (como o professor fez)
+suspend fun inserirFilme(nome: String, desc: String, filmesDao: FilmesDAO) {
+    // ... (corpo da função de inserção do professor) ...
+    filmesDao.inserir(Filmes(nome = nome, desc = desc))
 }
 
-@Preview(showBackground = true)
+// A função externa que busca os filmes (como o professor fez)
+suspend fun buscarFilmes(filmesDao: FilmesDAO): List<Filmes> {
+    return filmesDao.buscarTodos()
+}
+
+
 @Composable
-fun GreetingPreview() {
-    BancoOsorioTheme {
-        Greeting("Android")
+fun TelaCadastroFilmesSimplificada() {
+    // 1. ESTADO: Gerencia a lista localmente
+    var filmes by remember { mutableStateOf<List<Filmes>>(emptyList()) }
+
+    val context = LocalContext.current
+    val db = AppDatabase.getDatabase(context)
+    val filmesDao = db.filmesDAO()
+
+    // 2. EFEITO: Carrega os dados na inicialização
+    LaunchedEffect(Unit) {
+        filmes = buscarFilmes(filmesDao)
     }
-}
 
-@Composable
-fun FilmesScreen(
-    filmes: List<Filmes>,
-    onAdicionarClick: (String, String) -> Unit
-) {
+    // Lógica para recarregar a lista após uma inserção
+    fun recarregarFilmes() {
+        CoroutineScope(Dispatchers.Main).launch {
+            filmes = buscarFilmes(filmesDao)
+        }
+    }
+
     Scaffold(
         topBar = { Text("Lista de Filmes") },
         floatingActionButton = {
-            // Exemplo simples: insere um novo filme ao clicar no FAB
             Button(onClick = {
-                onAdicionarClick("Novo Filme ${filmes.size + 1}", "Descrição teste")
+                // 3. AÇÃO: Executa a inserção em IO, e RECARREGA a lista (no Main)
+                CoroutineScope(Dispatchers.IO).launch {
+                    inserirFilme("Novo Filme ${filmes.size + 1}", "Descrição teste", filmesDao)
+                    recarregarFilmes() // Chama a recarga para atualizar o estado
+                }
             }) {
                 Text("Adicionar Filme")
             }
         }
     ) { paddingValues ->
-        // Usa LazyColumn para lidar com listas grandes de forma eficiente
         LazyColumn(modifier = Modifier.padding(paddingValues)) {
             items(filmes) { filme ->
-                // Item de lista para cada filme
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(text = filme.nome, style = MaterialTheme.typography.titleMedium)
-                    Text(text = filme.desc, style = MaterialTheme.typography.bodySmall)
-                    HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
-                }
-            }
-            if (filmes.isEmpty()) {
-                item {
-                    Text(
-                        "Nenhum filme encontrado. Adicione um!",
-                        modifier = Modifier.padding(16.dp)
-                    )
+                    // ...
                 }
             }
         }
